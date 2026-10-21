@@ -1,0 +1,77 @@
+name: AI Website Evolver
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'
+
+jobs:
+  evolve:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: pip install google-genai requests
+
+      - name: Run AI Pairing Script
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          python3 -c "
+          import os, google.genai as genai, requests, json
+
+          print('Шаг 1: Gemini анализирует проект...')
+          client = genai.Client(api_key=os.environ['GEMINI_API_KEY'])
+
+          prompt = 'Ты главный архитектор веб-приложений. Напиши четкое ТЗ на создание красивой главной страницы (index.html) для современного портфолио.'
+          response = client.models.generate_content(
+              model='gemini-2.5-flash',
+              contents=prompt,
+          )
+          tz_text = response.text
+          print('ТЗ от Gemini получено.')
+
+          print('Шаг 2: DeepSeek пишет код...')
+          ds_response = requests.post(
+              'https://api.deepseek.com/chat/completions',
+              headers={
+                  'Authorization': f'Bearer {os.environ[\"DEEPSEEK_API_KEY\"]}',
+                  'Content-Type': 'application/json'
+              },
+              json={
+                  'model': 'deepseek-chat',
+              'messages': [
+                      {'role': 'system', 'content': 'Ты веб-разработчик. Верни ТОЛЬКО готовый HTML код без лишних слов.'},
+                      {'role': 'user', 'content': f'Напиши index.html по ТЗ: {tz_text}'}
+                  ],
+                  'stream': False
+              }
+          )
+
+          if ds_response.status_code == 200:
+              code = ds_response.json()['choices'][0]['message']['content']
+              # Очищаем от бэктиков если есть
+              code = code.replace('\`\`\`html', '').replace('\`\`\`', '').strip()
+              with open('index.html', 'w', encoding='utf-8') as f:
+                  f.write(code)
+              print('Файл index.html успешно создан!')
+          else:
+              print('Ошибка DeepSeek:', ds_response.text)
+          "
+
+      - name: Commit and Push changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "AI: Generated index.html by Gemini and DeepSeek"
+          branch: main
