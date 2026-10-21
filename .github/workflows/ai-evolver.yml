@@ -36,7 +36,7 @@ jobs:
 
           prompt = 'Ты главный архитектор веб-приложений. Напиши четкое ТЗ на создание красивой главной страницы (index.html) для современного портфолио.'
           response = client.models.generate_content(
-              model='gemini-2.5-flash',
+              model='gemini-1.5-flash',
               contents=prompt,
           )
           tz_text = response.text
